@@ -1,0 +1,22 @@
+services:
+  F5-TTS:
+    container_name: F5-TTS
+    build: .
+    restart: unless-stopped
+    ports:
+      - 8083:5000
+    networks:
+      - external_network
+      - internal_network
+    deploy:
+      resources:
+        reservations:
+          devices:
+          - driver: nvidia
+            count: all
+            capabilities: [gpu]
+
+networks:
+  external_network:
+  internal_network:
+    internal: true
