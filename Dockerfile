@@ -22,3 +22,5 @@ RUN git clone https://github.com/cyruschan360/F5-TTS.git \
 ENV SHELL=/bin/bash
 
 WORKDIR /workspace/F5-TTS
+
+ENTRYPOINT ["f5-tts_infer-gradio"]
