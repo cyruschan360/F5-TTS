@@ -1,5 +1,5 @@
 services:
-  F5-TTS:
+  tts:
     container_name: F5-TTS
     build: .
     restart: unless-stopped
