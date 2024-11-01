@@ -1,24 +1,22 @@
 from __future__ import annotations
 
-import os
 import gc
-from tqdm import tqdm
-import wandb
+import os
 
 import torch
-from torch.optim import AdamW
-from torch.utils.data import DataLoader, Dataset, SequentialSampler
-from torch.optim.lr_scheduler import LinearLR, SequentialLR
-
+import torchaudio
+import wandb
 from accelerate import Accelerator
 from accelerate.utils import DistributedDataParallelKwargs
-
 from ema_pytorch import EMA
+from torch.optim import AdamW
+from torch.optim.lr_scheduler import LinearLR, SequentialLR
+from torch.utils.data import DataLoader, Dataset, SequentialSampler
+from tqdm import tqdm
 
 from f5_tts.model import CFM
-from f5_tts.model.utils import exists, default
 from f5_tts.model.dataset import DynamicBatchSampler, collate_fn
-
+from f5_tts.model.utils import default, exists
 
 # trainer
 
@@ -39,31 +37,38 @@ class Trainer:
         max_grad_norm=1.0,
         noise_scheduler: str | None = None,
         duration_predictor: torch.nn.Module | None = None,
+        logger: str | None = "wandb",  # "wandb" | "tensorboard" | None
         wandb_project="test_e2-tts",
         wandb_run_name="test_run",
         wandb_resume_id: str = None,
+        log_samples: bool = False,
         last_per_steps=None,
         accelerate_kwargs: dict = dict(),
         ema_kwargs: dict = dict(),
         bnb_optimizer: bool = False,
+        mel_spec_type: str = "vocos",  # "vocos" | "bigvgan"
     ):
         ddp_kwargs = DistributedDataParallelKwargs(find_unused_parameters=True)
 
-        logger = "wandb" if wandb.api.api_key else None
+        if logger == "wandb" and not wandb.api.api_key:
+            logger = None
         print(f"Using logger: {logger}")
+        self.log_samples = log_samples
 
         self.accelerator = Accelerator(
-            log_with=logger,
+            log_with=logger if logger == "wandb" else None,
             kwargs_handlers=[ddp_kwargs],
             gradient_accumulation_steps=grad_accumulation_steps,
             **accelerate_kwargs,
         )
 
-        if logger == "wandb":
+        self.logger = logger
+        if self.logger == "wandb":
             if exists(wandb_resume_id):
                 init_kwargs = {"wandb": {"resume": "allow", "name": wandb_run_name, "id": wandb_resume_id}}
             else:
                 init_kwargs = {"wandb": {"resume": "allow", "name": wandb_run_name}}
+
             self.accelerator.init_trackers(
                 project_name=wandb_project,
                 init_kwargs=init_kwargs,
@@ -81,11 +86,15 @@ class Trainer:
                 },
             )
 
+        elif self.logger == "tensorboard":
+            from torch.utils.tensorboard import SummaryWriter
+
+            self.writer = SummaryWriter(log_dir=f"runs/{wandb_run_name}")
+
         self.model = model
 
         if self.is_main:
             self.ema_model = EMA(model, include_online_model=False, **ema_kwargs)
-
             self.ema_model.to(self.accelerator.device)
 
         self.epochs = epochs
@@ -99,6 +108,7 @@ class Trainer:
         self.max_samples = max_samples
         self.grad_accumulation_steps = grad_accumulation_steps
         self.max_grad_norm = max_grad_norm
+        self.vocoder_name = mel_spec_type
 
         self.noise_scheduler = noise_scheduler
 
@@ -153,10 +163,20 @@ class Trainer:
         # checkpoint = torch.load(f"{self.checkpoint_path}/{latest_checkpoint}", map_location=self.accelerator.device)  # rather use accelerator.load_state ಥ_ಥ
         checkpoint = torch.load(f"{self.checkpoint_path}/{latest_checkpoint}", weights_only=True, map_location="cpu")
 
+        # patch for backward compatibility, 305e3ea
+        for key in ["ema_model.mel_spec.mel_stft.mel_scale.fb", "ema_model.mel_spec.mel_stft.spectrogram.window"]:
+            if key in checkpoint["ema_model_state_dict"]:
+                del checkpoint["ema_model_state_dict"][key]
+
         if self.is_main:
             self.ema_model.load_state_dict(checkpoint["ema_model_state_dict"])
 
         if "step" in checkpoint:
+            # patch for backward compatibility, 305e3ea
+            for key in ["mel_spec.mel_stft.mel_scale.fb", "mel_spec.mel_stft.spectrogram.window"]:
+                if key in checkpoint["model_state_dict"]:
+                    del checkpoint["model_state_dict"][key]
+
             self.accelerator.unwrap_model(self.model).load_state_dict(checkpoint["model_state_dict"])
             self.accelerator.unwrap_model(self.optimizer).load_state_dict(checkpoint["optimizer_state_dict"])
             if self.scheduler:
@@ -176,6 +196,14 @@ class Trainer:
         return step
 
     def train(self, train_dataset: Dataset, num_workers=16, resumable_with_seed: int = None):
+        if self.log_samples:
+            from f5_tts.infer.utils_infer import cfg_strength, load_vocoder, nfe_step, sway_sampling_coef
+
+            vocoder = load_vocoder(vocoder_name=self.vocoder_name)
+            target_sample_rate = self.accelerator.unwrap_model(self.model).mel_spec.target_sample_rate
+            log_samples_path = f"{self.checkpoint_path}/samples"
+            os.makedirs(log_samples_path, exist_ok=True)
+
         if exists(resumable_with_seed):
             generator = torch.Generator()
             generator.manual_seed(resumable_with_seed)
@@ -286,11 +314,30 @@ class Trainer:
 
                 if self.accelerator.is_local_main_process:
                     self.accelerator.log({"loss": loss.item(), "lr": self.scheduler.get_last_lr()[0]}, step=global_step)
+                    if self.logger == "tensorboard":
+                        self.writer.add_scalar("loss", loss.item(), global_step)
+                        self.writer.add_scalar("lr", self.scheduler.get_last_lr()[0], global_step)
 
                 progress_bar.set_postfix(step=str(global_step), loss=loss.item())
 
                 if global_step % (self.save_per_updates * self.grad_accumulation_steps) == 0:
                     self.save_checkpoint(global_step)
+
+                    if self.log_samples and self.accelerator.is_local_main_process:
+                        ref_audio, ref_audio_len = vocoder.decode(batch["mel"][0].unsqueeze(0)), mel_lengths[0]
+                        torchaudio.save(f"{log_samples_path}/step_{global_step}_ref.wav", ref_audio, target_sample_rate)
+                        with torch.inference_mode():
+                            generated, _ = self.accelerator.unwrap_model(self.model).sample(
+                                cond=mel_spec[0][:ref_audio_len].unsqueeze(0),
+                                text=[text_inputs[0] + [" "] + text_inputs[0]],
+                                duration=ref_audio_len * 2,
+                                steps=nfe_step,
+                                cfg_strength=cfg_strength,
+                                sway_sampling_coef=sway_sampling_coef,
+                            )
+                        generated = generated.to(torch.float32)
+                        gen_audio = vocoder.decode(generated[:, ref_audio_len:, :].permute(0, 2, 1).cpu())
+                        torchaudio.save(f"{log_samples_path}/step_{global_step}_gen.wav", gen_audio, target_sample_rate)
 
                 if global_step % self.last_per_steps == 0:
                     self.save_checkpoint(global_step, last=True)

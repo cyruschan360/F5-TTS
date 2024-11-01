@@ -6,6 +6,7 @@ Currently support **30s for a single** generation, which is the **total length**
 
 To avoid possible inference failures, make sure you have seen through the following instructions.
 
+- Use reference audio <15s and leave some silence (e.g. 1s) at the end. Otherwise there is a risk of truncating in the middle of word, leading to suboptimal generation.
 - Uppercased letters will be uttered letter by letter, so use lowercased letters for normal words. 
 - Add some spaces (blank: " ") or punctuations (e.g. "," ".") to explicitly introduce some pauses.
 - Preprocess numbers to Chinese letters if you want to have them read in Chinese, otherwise in English.
@@ -55,6 +56,10 @@ f5-tts_infer-cli \
 --ref_audio "ref_audio.wav" \
 --ref_text "The content, subtitle or transcription of reference audio." \
 --gen_text "Some text you want TTS model generate for you."
+
+# Choose Vocoder
+f5-tts_infer-cli --vocoder_name bigvgan --load_vocoder_from_local --ckpt_file <YOUR_CKPT_PATH, eg:ckpts/F5TTS_Base_bigvgan/model_1250000.pt>
+f5-tts_infer-cli --vocoder_name vocos --load_vocoder_from_local --ckpt_file <YOUR_CKPT_PATH, eg:ckpts/F5TTS_Base/model_1200000.safetensors>
 ```
 
 And a `.toml` file would help with more flexible usage.
