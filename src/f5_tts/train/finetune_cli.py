@@ -45,7 +45,7 @@ def parse_args():
     parser.add_argument("--save_per_updates", type=int, default=10000, help="Save checkpoint every X steps")
     parser.add_argument("--last_per_steps", type=int, default=50000, help="Save last checkpoint every X steps")
     parser.add_argument("--finetune", type=bool, default=True, help="Use Finetune")
-    parser.add_argument("--pretrain", type=str, default=None, help="Use pretrain model for finetune")
+    parser.add_argument("--pretrain", type=str, default=None, help="the path to the checkpoint")
     parser.add_argument(
         "--tokenizer", type=str, default="pinyin", choices=["pinyin", "char", "custom"], help="Tokenizer type"
     )
@@ -56,6 +56,14 @@ def parse_args():
         help="Path to custom tokenizer vocab file (only used if tokenizer = 'custom')",
     )
 
+    parser.add_argument(
+        "--log_samples",
+        type=bool,
+        default=False,
+        help="Log inferenced samples per ckpt save steps",
+    )
+    parser.add_argument("--logger", type=str, default=None, choices=["wandb", "tensorboard"], help="logger")
+
     return parser.parse_args()
 
 
@@ -64,6 +72,7 @@ def parse_args():
 
 def main():
     args = parse_args()
+
     checkpoint_path = str(files("f5_tts").joinpath(f"../../ckpts/{args.dataset_name}"))
 
     # Model parameters based on experiment name
@@ -89,7 +98,11 @@ def main():
     if args.finetune:
         if not os.path.isdir(checkpoint_path):
             os.makedirs(checkpoint_path, exist_ok=True)
-            shutil.copy2(ckpt_path, os.path.join(checkpoint_path, os.path.basename(ckpt_path)))
+
+        file_checkpoint = os.path.join(checkpoint_path, os.path.basename(ckpt_path))
+        if not os.path.isfile(file_checkpoint):
+            shutil.copy2(ckpt_path, file_checkpoint)
+            print("copy checkpoint for finetune")
 
     # Use the tokenizer and tokenizer_path provided in the command line arguments
     tokenizer = args.tokenizer
@@ -101,6 +114,8 @@ def main():
         tokenizer_path = args.dataset_name
 
     vocab_char_map, vocab_size = get_tokenizer(tokenizer_path, tokenizer)
+
+    print("\nvocab : ", vocab_size)
 
     mel_spec_kwargs = dict(
         target_sample_rate=target_sample_rate,
@@ -126,9 +141,11 @@ def main():
         max_samples=args.max_samples,
         grad_accumulation_steps=args.grad_accumulation_steps,
         max_grad_norm=args.max_grad_norm,
+        logger=args.logger,
         wandb_project=args.dataset_name,
         wandb_run_name=args.exp_name,
         wandb_resume_id=wandb_resume_id,
+        log_samples=args.log_samples,
         last_per_steps=args.last_per_steps,
     )
 
