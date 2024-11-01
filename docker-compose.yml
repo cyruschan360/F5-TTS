@@ -6,6 +6,8 @@ services:
     ports:
       - 8083:7860
     command: ["--host", "0.0.0.0", "--port", "7860"]
+    volumes:
+      - ./src:src
     networks:
       - external_network
       - internal_network

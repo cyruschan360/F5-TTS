@@ -646,6 +646,35 @@ If you're having issues, try converting your reference audio to WAV or MP3, clip
         ["TTS", "Multi-Speech", "Voice-Chat", "Credits"],
     )
 
+head = f"""
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-2TWT9G153G"></script>
+<script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){{dataLayer.push(arguments);}}
+    gtag('js', new Date());
+
+    gtag('config', 'G-2TWT9G153G');
+</script>
+<!-- End of Google tag (gtag.js) -->
+        
+<!-- Buymeacoffee -->
+<script src="https://cdnjs.buymeacoffee.com/1.0.0/widget.prod.min.js"
+data-name="BMC-Widget" 
+data-cfasync="false" 
+data-id="giganticwork" 
+data-description="Your support moves us forward and makes the site sustainable." 
+data-message="Your support moves us forward and makes the site sustainable." 
+data-color="#40DCA5" 
+data-position="Right" 
+data-x_margin="18" 
+data-y_margin="18"></script>
+<!-- End of Buymeacoffee -->
+"""
+
+with gr.Blocks(head=head) as googleTag:
+    gr.HTML("")
+
 
 @click.command()
 @click.option("--port", "-p", default=None, type=int, help="Port to run the app on")
@@ -657,7 +686,7 @@ If you're having issues, try converting your reference audio to WAV or MP3, clip
     is_flag=True,
     help="Share the app via Gradio share link",
 )
-@click.option("--api", "-a", default=True, is_flag=True, help="Allow API access")
+@click.option("--api", "-a", default=False, is_flag=True, help="Allow API access")
 def main(port, host, share, api):
     global app
     print("Starting app...")
