@@ -732,7 +732,7 @@ data-y_margin="18"></script>
 """
 
 with gr.Blocks(head=head) as googleTag:
-    gr.HTML("")
+    gr.HTML(head)
 
 
 @click.command()
