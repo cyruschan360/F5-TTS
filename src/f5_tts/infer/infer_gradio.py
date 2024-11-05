@@ -709,7 +709,9 @@ data-y_margin="18"></script>
 <!-- End of Buymeacoffee -->
 """
 
-with gr.Blocks(head=head) as app:
+title = "F5/E2 TTS"
+
+with gr.Blocks(head=head, title=title) as app:
     gr.Markdown(
         """
 # E2/F5 TTS
