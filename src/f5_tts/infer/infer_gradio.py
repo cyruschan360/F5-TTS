@@ -682,6 +682,7 @@ Have a conversation with an AI using your reference voice!
             outputs=[chatbot_interface, conversation_state],
         )
 
+title = "F5/E2 TTS"
 
 head = f"""
 <!-- Google tag (gtag.js) -->
@@ -694,7 +695,9 @@ head = f"""
     gtag('config', 'G-2TWT9G153G');
 </script>
 <!-- End of Google tag (gtag.js) -->
-        
+"""
+
+buymeacoffee = f"""      
 <!-- Buymeacoffee -->
 <script src="https://cdnjs.buymeacoffee.com/1.0.0/widget.prod.min.js"
 data-name="BMC-Widget" 
@@ -709,7 +712,6 @@ data-y_margin="18"></script>
 <!-- End of Buymeacoffee -->
 """
 
-title = "F5/E2 TTS"
 
 with gr.Blocks(head=head, title=title) as app:
     gr.Markdown(
@@ -732,6 +734,7 @@ If you're having issues, try converting your reference audio to WAV or MP3, clip
         [app_tts, app_multistyle, app_chat, app_credits],
         ["TTS", "Multi-Speech", "Voice-Chat", "Credits"],
     )
+    gr.HTML(buymeacoffee)
 
 
 @click.command()
