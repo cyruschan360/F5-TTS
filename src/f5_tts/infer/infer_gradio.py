@@ -683,28 +683,6 @@ Have a conversation with an AI using your reference voice!
         )
 
 
-with gr.Blocks() as app:
-    gr.Markdown(
-        """
-# E2/F5 TTS
-
-This is a local web UI for F5 TTS with advanced batch processing support. This app supports the following TTS models:
-
-* [F5-TTS](https://arxiv.org/abs/2410.06885) (A Fairytaler that Fakes Fluent and Faithful Speech with Flow Matching)
-* [E2 TTS](https://arxiv.org/abs/2406.18009) (Embarrassingly Easy Fully Non-Autoregressive Zero-Shot TTS)
-
-The checkpoints support English and Chinese.
-
-If you're having issues, try converting your reference audio to WAV or MP3, clipping it to 15s, and shortening your prompt.
-
-**NOTE: Reference text will be automatically transcribed with Whisper if not provided. For best results, keep your reference clips short (<15s). Ensure the audio is fully uploaded before generating.**
-"""
-    )
-    gr.TabbedInterface(
-        [app_tts, app_multistyle, app_chat, app_credits],
-        ["TTS", "Multi-Speech", "Voice-Chat", "Credits"],
-    )
-
 head = f"""
 <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-2TWT9G153G"></script>
@@ -731,8 +709,27 @@ data-y_margin="18"></script>
 <!-- End of Buymeacoffee -->
 """
 
-with gr.Blocks(head=head) as googleTag:
-    gr.HTML(head)
+with gr.Blocks(head=head) as app:
+    gr.Markdown(
+        """
+# E2/F5 TTS
+
+This is a local web UI for F5 TTS with advanced batch processing support. This app supports the following TTS models:
+
+* [F5-TTS](https://arxiv.org/abs/2410.06885) (A Fairytaler that Fakes Fluent and Faithful Speech with Flow Matching)
+* [E2 TTS](https://arxiv.org/abs/2406.18009) (Embarrassingly Easy Fully Non-Autoregressive Zero-Shot TTS)
+
+The checkpoints support English and Chinese.
+
+If you're having issues, try converting your reference audio to WAV or MP3, clipping it to 15s, and shortening your prompt.
+
+**NOTE: Reference text will be automatically transcribed with Whisper if not provided. For best results, keep your reference clips short (<15s). Ensure the audio is fully uploaded before generating.**
+"""
+    )
+    gr.TabbedInterface(
+        [app_tts, app_multistyle, app_chat, app_credits],
+        ["TTS", "Multi-Speech", "Voice-Chat", "Credits"],
+    )
 
 
 @click.command()
